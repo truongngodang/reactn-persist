@@ -15,12 +15,22 @@ const log = (method, payload) => {
 	console.log('reactn-persist: ', method, payload);
 };
 
-const rehidrate = async ({ storage, key, initialValue, debug }) => {
+const rehidrate = async ({ storage, key, initialValue, whitelist, debug }) => {
 	try {
 		const persistedGlobalValue = await storage.getItem(key);
 		const persistedGlobal = JSON.parse(persistedGlobalValue);
+		let persistedGlobalFilter = persistedGlobal;
+		if (whitelist.length > 0) {
+			persistedGlobalFilter = Object.keys(persistedGlobal).reduce((item, key) => {
+				if (whitelist.includes(key)) {
+					item[key] = persistedGlobal[key];
+				}
+				return item;
+			}, Object.create(null));
+			storage.setItem(key, JSON.stringify(persistedGlobalFilter));
+		}
 		const global = getGlobal();
-		setGlobal({ ...initialValue, ...persistedGlobal, [REHIDRATED_KEY]: true });
+		setGlobal({ ...initialValue, ...persistedGlobalFilter, [REHIDRATED_KEY]: true });
 		debug && log('rehidrate', { initial: { ...global }, persisted: { ...persistedGlobal } });
 	} catch (error) {
 		setGlobal({ ...initialValue, [REHIDRATED_KEY]: true });
@@ -57,7 +67,7 @@ const init = async ({
 	initialValue = defaults.initialValue,
 }) => {
 	try {
-		await rehidrate({ storage, key, initialValue });
+		await rehidrate({ storage, key, initialValue, whitelist });
 		const debouncedPersist = debounce(persist({ storage, key, whitelist }), debounceDelay);
 		addCallback(debouncedPersist);
 		debug && log('init', { success: true });
